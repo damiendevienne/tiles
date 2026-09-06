@@ -22,7 +22,7 @@ A désigne l’image de base, B sa rotation de 90°. La notation associe une sé
 
 ## Export
 
-Chaque export porte la signature `https://damiendevienne.github.io/tiles/` en petit, en blanc sur un fond bleu pâle aux coins arrondis, en bas à droite.
+Chaque export porte la signature `https://damiendevienne.github.io/tiles/` en petit, en bleu `#002b68` sur un fond `#e9ddaf` à 50 % d’opacité aux coins arrondis, en bas à droite.
 
 « Exporter PNG » télécharge le pavage visible aux dimensions de la page (en pixels CSS), sans les contrôles. L’export conserve les modifications manuelles, le zoom et les tuiles coupées aux bords. Il capture les orientations finales au moment du clic, même si une rotation individuelle est encore en cours. Il est disponible dès que l’application d’un motif est terminée. Le canvas sert uniquement à créer ce fichier ; l’affichage interactif reste en HTML.
 

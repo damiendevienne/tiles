@@ -348,9 +348,9 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
 function drawExportSignature(context, width, height) {
   const text = 'https://damiendevienne.github.io/tiles/';
   context.save();
-  let fontSize = 11;
+  let fontSize = 8;
   const margin = Math.min(8, width / 40, height / 40);
-  const padding = 6;
+  const padding = 3;
   context.font = `${fontSize}px sans-serif`;
   const available = Math.max(1, width - margin * 2 - padding * 2);
   if (context.measureText(text).width > available) {
@@ -361,11 +361,11 @@ function drawExportSignature(context, width, height) {
   const boxHeight = fontSize + padding * 2;
   const x = width - margin - boxWidth;
   const y = height - margin - boxHeight;
-  context.fillStyle = '#97b9d2';
+  context.fillStyle = 'rgba(233, 221, 175, 0.5)';
   context.beginPath();
   context.roundRect(x, y, boxWidth, boxHeight, 5);
   context.fill();
-  context.fillStyle = '#ffffff';
+  context.fillStyle = '#002b68';
   context.textAlign = 'left';
   context.textBaseline = 'middle';
   context.fillText(text, x + padding, y + boxHeight / 2);
