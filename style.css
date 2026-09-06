@@ -65,6 +65,24 @@ html, body {
 }
 
 .zoom { display: flex; align-items: center; gap: 12px; }
+#controls-toggle { display: block; margin: 0 0 8px auto; min-width: 34px; font-size: 18px; }
+.controls.is-collapsed { width: auto; padding: 6px; }
+.controls.is-collapsed #controls-toggle { margin: 0; }
+.controls .patterns button, #apply-pattern { position: relative; padding-right: 27px; }
+.controls button.is-loading { opacity: 1; cursor: progress; }
+.is-loading::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: calc(50% - 6px);
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 650ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .zoom input { flex: 1; min-width: 0; margin: 0; accent-color: #052c60; cursor: pointer; }
 .patterns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .controls button {
@@ -110,4 +128,5 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .tile-image { transition: none; }
+  .is-loading::after { animation: none; }
 }

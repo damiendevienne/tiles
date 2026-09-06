@@ -4,6 +4,7 @@ const patternButtons = document.querySelectorAll('[data-pattern]');
 const tiles = new Map();
 let activePattern = '1';
 let layoutFrame;
+let applyingPattern = false;
 const presets = {
   '1': { sequence: 'A', shift: 0 },
   '2': { sequence: 'B', shift: 0 },
@@ -17,6 +18,15 @@ const patternName = document.querySelector('#pattern-name');
 const preview = document.querySelector('#preview');
 const applyButton = document.querySelector('#apply-pattern');
 const editorStatus = document.querySelector('#editor-status');
+const controlsToggle = document.querySelector('#controls-toggle');
+controlsToggle.addEventListener('click', () => {
+  const content = document.querySelector('#controls-content');
+  content.hidden = !content.hidden;
+  document.querySelector('.controls').classList.toggle('is-collapsed', content.hidden);
+  controlsToggle.setAttribute('aria-expanded', String(!content.hidden));
+  controlsToggle.setAttribute('aria-label', content.hidden ? 'Afficher les contrôles' : 'Réduire les contrôles');
+  controlsToggle.textContent = content.hidden ? '☰' : '−';
+});
 
 // Reserve zoom for the slider, including trackpad pinch and browser shortcuts.
 document.addEventListener('wheel', event => {
@@ -89,6 +99,7 @@ function layout() {
         tile = { button, image, column, row, turns: orientation(activePattern, column, row) };
         paint(tile);
         button.addEventListener('click', () => {
+          if (applyingPattern) return;
           tile.turns++;
           paint(tile);
           selectPattern(null);
@@ -103,21 +114,53 @@ function layout() {
   paving.append(fragment);
 }
 
-function applyPattern(pattern) {
-  selectPattern(pattern);
-  editorStatus.textContent = '';
-  for (const tile of tiles.values()) {
-    const target = orientation(pattern, tile.column, tile.row);
-    // Accumulate clockwise turns; leave already correct tiles untouched.
-    if (tile.turns % 2 !== target) {
-      tile.turns++;
-      paint(tile);
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+
+async function applyPattern(pattern, button) {
+  if (applyingPattern) return;
+  applyingPattern = true;
+  button.classList.add('is-loading');
+  button.setAttribute('aria-busy', 'true');
+  const inputs = [...patternButtons, applyButton, zoom, sequenceInput, shiftInput];
+  const disabledStates = inputs.map(input => input.disabled);
+  inputs.forEach(input => { input.disabled = true; });
+  try {
+    // Let the spinner paint before starting the tile updates.
+    await nextFrame();
+    await nextFrame();
+    selectPattern(pattern);
+    editorStatus.textContent = '';
+    let processed = 0;
+    let changed = false;
+    for (const tile of tiles.values()) {
+      const target = orientation(pattern, tile.column, tile.row);
+      // Accumulate clockwise turns; leave already correct tiles untouched.
+      if (tile.turns % 2 !== target) {
+        tile.turns++;
+        paint(tile);
+        changed = true;
+      }
+      // Yield regularly so the loading indicator and controls remain responsive.
+      if (++processed % 200 === 0) await nextFrame();
     }
+    await nextFrame();
+    if (changed && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } finally {
+    button.classList.remove('is-loading');
+    button.removeAttribute('aria-busy');
+    inputs.forEach((input, index) => { input.disabled = disabledStates[index]; });
+    applyingPattern = false;
   }
 }
 
 patternButtons.forEach(button => {
-  button.addEventListener('click', () => applyPattern(button.dataset.pattern));
+  button.addEventListener('click', () => {
+    editor.hidden = true;
+    document.querySelector('#editor-toggle').setAttribute('aria-expanded', 'false');
+    applyPattern(button.dataset.pattern, button);
+  });
 });
 
 for (const name of ['editor', 'info']) {
@@ -172,11 +215,11 @@ function updateEditor() {
 
 sequenceInput.addEventListener('input', updateEditor);
 shiftInput.addEventListener('input', updateEditor);
-editor.addEventListener('submit', event => {
+editor.addEventListener('submit', async event => {
   event.preventDefault();
-  if (!sequenceInput.value) return;
+  if (!sequenceInput.value || applyingPattern) return;
   // Copy the draft so further edits do not change the applied pattern.
-  applyPattern(draftPattern());
+  await applyPattern(draftPattern(), applyButton);
   editorStatus.textContent = `${patternName.textContent} appliqué`;
 });
 
