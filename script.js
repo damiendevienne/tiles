@@ -3,6 +3,11 @@ const zoom = document.querySelector('#zoom');
 const patternButtons = document.querySelectorAll('[data-pattern]');
 const tiles = new Map();
 let activePattern = '1';
+let basePattern = '1';
+const tileStates = new Map();
+let tileSize = Number(zoom.value);
+let offsetX = 0;
+let offsetY = 0;
 let layoutFrame;
 let applyingPattern = false;
 const presets = {
@@ -32,7 +37,7 @@ controlsToggle.addEventListener('click', () => {
   controlsToggle.textContent = content.hidden ? '☰' : '−';
 });
 
-// Reserve zoom for the slider, including trackpad pinch and browser shortcuts.
+// Prevent browser zoom: gestures change only the paving.
 document.addEventListener('wheel', event => {
   if (event.ctrlKey || event.metaKey) event.preventDefault();
 }, { passive: false });
@@ -53,13 +58,15 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 function orientation(pattern, column, row) {
   const definition = typeof pattern === 'object' ? pattern : presets[pattern];
   if (definition) {
-    const index = (column + row * definition.shift) % definition.sequence.length;
+    const length = definition.sequence.length;
+    const index = ((column + row * definition.shift) % length + length) % length;
     return definition.sequence[index] === 'B' ? 1 : 0;
   }
   return Math.random() < 0.5 ? 0 : 1;
 }
 
 function paint(tile) {
+  tileStates.set(`${tile.column},${tile.row}`, tile.turns);
   tile.image.style.transform = `rotate(${tile.turns * 90}deg)`;
   tile.button.setAttribute('aria-label', `Tuile ${tile.column + 1}, ${tile.row + 1} : position ${tile.turns % 2 ? 'b' : 'a'}. Tourner de 90 degrés.`);
 }
@@ -74,22 +81,24 @@ function selectPattern(pattern) {
 }
 
 function layout() {
-  const size = Number(zoom.value);
+  const size = tileSize;
   paving.style.setProperty('--tile-size', `${size}px`);
-  const columns = Math.ceil(paving.clientWidth / size);
-  const rows = Math.ceil(paving.clientHeight / size);
+  const firstColumn = Math.floor(-offsetX / size);
+  const firstRow = Math.floor(-offsetY / size);
+  const columns = Math.ceil((paving.clientWidth - offsetX) / size);
+  const rows = Math.ceil((paving.clientHeight - offsetY) / size);
 
   // Keep each remaining tile's orientation when zooming or resizing.
   for (const [key, tile] of tiles) {
-    if (tile.column >= columns || tile.row >= rows) {
+    if (tile.column < firstColumn || tile.row < firstRow || tile.column >= columns || tile.row >= rows) {
       tile.button.remove();
       tiles.delete(key);
     }
   }
 
   const fragment = document.createDocumentFragment();
-  for (let row = 0; row < rows; row++) {
-    for (let column = 0; column < columns; column++) {
+  for (let row = firstRow; row < rows; row++) {
+    for (let column = firstColumn; column < columns; column++) {
       const key = `${column},${row}`;
       let tile = tiles.get(key);
       if (!tile) {
@@ -100,19 +109,17 @@ function layout() {
         image.className = 'tile-image';
         image.setAttribute('aria-hidden', 'true');
         button.append(image);
-        tile = { button, image, column, row, turns: orientation(activePattern, column, row) };
+        tile = { button, image, column, row, turns: tileStates.get(key) ?? orientation(basePattern, column, row) };
         paint(tile);
-        button.addEventListener('click', () => {
-          if (applyingPattern) return;
-          tile.turns++;
-          paint(tile);
-          selectPattern(null);
+        button.addEventListener('click', event => {
+          // Pointer taps are handled on pointerup; keep keyboard activation.
+          if (event.detail === 0 && !applyingPattern) rotateTile(tile);
         });
         tiles.set(key, tile);
         fragment.append(button);
       }
-      tile.button.style.left = `${column * size}px`;
-      tile.button.style.top = `${row * size}px`;
+      tile.button.style.left = `${offsetX + column * size}px`;
+      tile.button.style.top = `${offsetY + row * size}px`;
     }
   }
   paving.append(fragment);
@@ -132,6 +139,9 @@ async function applyPattern(pattern, button) {
     // Let the spinner paint before starting the tile updates.
     await nextFrame();
     await nextFrame();
+    layout();
+    basePattern = pattern;
+    tileStates.clear();
     selectPattern(pattern);
     editorStatus.textContent = '';
     let processed = 0;
@@ -144,6 +154,7 @@ async function applyPattern(pattern, button) {
         paint(tile);
         changed = true;
       }
+      tileStates.set(`${tile.column},${tile.row}`, tile.turns);
       // Yield regularly so the loading indicator and controls remain responsive.
       if (++processed % 200 === 0) await nextFrame();
     }
@@ -233,6 +244,89 @@ function scheduleLayout() {
   layoutFrame = requestAnimationFrame(layout);
 }
 
+function rotateTile(tile) {
+  tile.turns++;
+  paint(tile);
+  selectPattern(null);
+}
+
+function zoomAt(value, x, y) {
+  const nextSize = Math.max(Number(zoom.min), Math.min(Number(zoom.max), Math.round(value)));
+  const ratio = nextSize / tileSize;
+  offsetX = x - (x - offsetX) * ratio;
+  offsetY = y - (y - offsetY) * ratio;
+  tileSize = nextSize;
+  zoom.value = String(nextSize);
+  scheduleLayout();
+}
+
+paving.addEventListener('wheel', event => {
+  event.preventDefault();
+  if (applyingPattern) return;
+  const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? paving.clientHeight : 1);
+  zoomAt(tileSize * Math.exp(-delta * 0.002), event.clientX, event.clientY);
+}, { passive: false });
+
+const pointers = new Map();
+let gesture = null;
+let dragged = false;
+
+function gestureMetrics() {
+  const points = [...pointers.values()];
+  const a = points[0];
+  const b = points[1] || a;
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2,
+    distance: Math.hypot(a.x - b.x, a.y - b.y) };
+}
+
+function resetGesture() {
+  gesture = pointers.size ? { ...gestureMetrics(), size: tileSize, offsetX, offsetY } : null;
+}
+
+paving.addEventListener('pointerdown', event => {
+  if (applyingPattern || event.button !== 0) return;
+  if (!pointers.size) dragged = false;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size > 1) dragged = true;
+  paving.setPointerCapture(event.pointerId);
+  resetGesture();
+});
+
+paving.addEventListener('pointermove', event => {
+  if (!pointers.has(event.pointerId) || !gesture) return;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (applyingPattern) { dragged = true; resetGesture(); return; }
+  const current = gestureMetrics();
+  if (!dragged && Math.hypot(current.x - gesture.x, current.y - gesture.y) < 6) return;
+  dragged = true;
+  paving.classList.add('is-dragging');
+  const scale = gesture.distance > 0 && pointers.size > 1 ? current.distance / gesture.distance : 1;
+  tileSize = Math.max(Number(zoom.min), Math.min(Number(zoom.max), Math.round(gesture.size * scale)));
+  const ratio = tileSize / gesture.size;
+  offsetX = current.x - (gesture.x - gesture.offsetX) * ratio;
+  offsetY = current.y - (gesture.y - gesture.offsetY) * ratio;
+  zoom.value = String(tileSize);
+  scheduleLayout();
+});
+
+function finishPointer(event) {
+  if (!pointers.has(event.pointerId)) return;
+  if (event.type === 'pointerup' && !dragged && !applyingPattern) {
+    const column = Math.floor((event.clientX - offsetX) / tileSize);
+    const row = Math.floor((event.clientY - offsetY) / tileSize);
+    const tile = tiles.get(`${column},${row}`);
+    if (tile) rotateTile(tile);
+  }
+  pointers.delete(event.pointerId);
+  if (paving.hasPointerCapture(event.pointerId)) paving.releasePointerCapture(event.pointerId);
+  resetGesture();
+  if (!pointers.size) paving.classList.remove('is-dragging');
+}
+
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  paving.addEventListener(type, finishPointer);
+}
+
 exportButton.addEventListener('click', async () => {
   if (exportingImage || applyingPattern) return;
   exportingImage = true;
@@ -248,7 +342,9 @@ exportButton.addEventListener('click', async () => {
     // Flush a pending zoom, then snapshot the settled orientations at click time.
     cancelAnimationFrame(layoutFrame);
     layout();
-    const size = Number(zoom.value);
+    const size = tileSize;
+    const exportX = offsetX;
+    const exportY = offsetY;
     const width = paving.clientWidth;
     const height = paving.clientHeight;
     const snapshot = [...tiles.values()].map(({ column, row, turns }) => ({ column, row, turns }));
@@ -275,7 +371,7 @@ exportButton.addEventListener('click', async () => {
     let processed = 0;
     for (const { column, row, turns } of snapshot) {
       context.save();
-      context.translate((column + 0.5) * size, (row + 0.5) * size);
+      context.translate(exportX + (column + 0.5) * size, exportY + (row + 0.5) * size);
       context.rotate((turns % 4) * Math.PI / 2);
       context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, -size / 2, -size / 2, size, size);
       context.restore();
@@ -309,7 +405,7 @@ exportButton.addEventListener('click', async () => {
   }
 });
 
-zoom.addEventListener('input', scheduleLayout);
+zoom.addEventListener('input', () => zoomAt(Number(zoom.value), paving.clientWidth / 2, paving.clientHeight / 2));
 window.addEventListener('resize', scheduleLayout);
 updateEditor();
 layout();

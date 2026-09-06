@@ -4,6 +4,12 @@ Site statique, sans dépendances, compatible avec GitHub Pages. Ouvrir `index.ht
 
 Le pavage utilise uniquement `img/tile.png`. Le slider règle la taille des tuiles de 30 à 240 pixels. Les contrôles peuvent être repliés pour dégager la vue. Un indicateur dans le bouton sélectionné accompagne l’application des motifs.
 
+## Navigation
+
+La molette zoome autour du pointeur ; cliquer-glisser déplace le pavage. Sur écran tactile, glisser avec un doigt déplace le pavage et pincer avec deux doigts zoome autour de leur centre. Le slider reste synchronisé (30 à 240 pixels) et zoome autour du centre de l’écran. Un clic ou toucher bref tourne une tuile ; un glissement ne la tourne pas. Les contrôles restent fixes et le navigateur ne zoome pas la page.
+
+Les orientations des tuiles visitées sont conservées pendant la navigation. Appliquer un motif réinitialise cette mémoire et prolonge le nouveau motif sur les zones découvertes ensuite. L’export PNG respecte le cadrage courant, y compris après déplacement.
+
 ## Motifs
 
 A désigne l’image de base, B sa rotation de 90°. La notation associe une séquence répétée horizontalement à un décalage vers la gauche par ligne : `ABd0` pour des colonnes alternées, `ABd1` pour un damier. L’éditeur permet de choisir une séquence et un décalage de 0 à sa longueur moins 1.
