@@ -28,13 +28,16 @@ const exportStatus = document.querySelector('#export-status');
 let exportingImage = false;
 let exportStatusTimer;
 const controlsToggle = document.querySelector('#controls-toggle');
-controlsToggle.addEventListener('click', () => {
+function setControlsCollapsed(collapsed) {
   const content = document.querySelector('#controls-content');
-  content.hidden = !content.hidden;
+  content.hidden = collapsed;
   document.querySelector('.controls').classList.toggle('is-collapsed', content.hidden);
   controlsToggle.setAttribute('aria-expanded', String(!content.hidden));
-  controlsToggle.setAttribute('aria-label', content.hidden ? 'Afficher les contrôles' : 'Réduire les contrôles');
+  controlsToggle.setAttribute('aria-label', t(content.hidden ? 'expand' : 'collapse'));
   controlsToggle.textContent = content.hidden ? '☰' : '−';
+}
+controlsToggle.addEventListener('click', () => {
+  setControlsCollapsed(!document.querySelector('#controls-content').hidden);
 });
 
 // Prevent browser zoom: gestures change only the paving.
@@ -68,11 +71,12 @@ function orientation(pattern, column, row) {
 function paint(tile) {
   tileStates.set(`${tile.column},${tile.row}`, tile.turns);
   tile.image.style.transform = `rotate(${tile.turns * 90}deg)`;
-  tile.button.setAttribute('aria-label', `Tuile ${tile.column + 1}, ${tile.row + 1} : position ${tile.turns % 2 ? 'b' : 'a'}. Tourner de 90 degrés.`);
+  tile.button.setAttribute('aria-label', t('tile', { column: tile.column + 1, row: tile.row + 1, position: tile.turns % 2 ? 'b' : 'a' }));
 }
 
 function selectPattern(pattern) {
   activePattern = pattern;
+  updateApplyState();
   patternButtons.forEach(button => {
     if (button.dataset.pattern !== 'random') {
       button.setAttribute('aria-pressed', String(button.dataset.pattern === pattern));
@@ -113,7 +117,7 @@ function layout() {
         paint(tile);
         button.addEventListener('click', event => {
           // Pointer taps are handled on pointerup; keep keyboard activation.
-          if (event.detail === 0 && !applyingPattern) rotateTile(tile);
+          if (event.detail === 0 && !applyingPattern) activateTile(tile, event);
         });
         tiles.set(key, tile);
         fragment.append(button);
@@ -143,7 +147,7 @@ async function applyPattern(pattern, button) {
     basePattern = pattern;
     tileStates.clear();
     selectPattern(pattern);
-    editorStatus.textContent = '';
+    setStatus(editorStatus, '');
     let processed = 0;
     let changed = false;
     for (const tile of tiles.values()) {
@@ -168,6 +172,7 @@ async function applyPattern(pattern, button) {
     inputs.forEach((input, index) => { input.disabled = disabledStates[index]; });
     exportButton.disabled = exportingImage;
     applyingPattern = false;
+    updateApplyState();
   }
 }
 
@@ -184,10 +189,6 @@ for (const name of ['editor', 'info']) {
   const panel = document.querySelector(`#${name}`);
   toggle.addEventListener('click', () => {
     const opening = panel.hidden;
-    for (const other of ['editor', 'info']) {
-      document.querySelector(`#${other}`).hidden = true;
-      document.querySelector(`#${other}-toggle`).setAttribute('aria-expanded', 'false');
-    }
     panel.hidden = !opening;
     toggle.setAttribute('aria-expanded', String(opening));
   });
@@ -195,6 +196,13 @@ for (const name of ['editor', 'info']) {
 
 function draftPattern() {
   return { sequence: sequenceInput.value, shift: Number(shiftInput.value) };
+}
+
+function updateApplyState() {
+  const draft = draftPattern();
+  const applied = typeof activePattern === 'object' ? activePattern : presets[activePattern];
+  const matches = applied && applied.sequence === draft.sequence && applied.shift === draft.shift;
+  applyButton.classList.toggle('is-pending', Boolean(draft.sequence) && (!matches || applyingPattern));
 }
 
 function updateEditor() {
@@ -207,13 +215,14 @@ function updateEditor() {
   document.querySelector('#shift-value').textContent = String(shift);
   const pattern = draftPattern();
   const valid = pattern.sequence.length > 0;
+  updateApplyState();
   applyButton.disabled = !valid;
-  patternName.textContent = valid ? `${pattern.sequence}d${pattern.shift}` : 'Saisis une séquence de A et B';
-  editorStatus.textContent = '';
+  patternName.textContent = valid ? `${pattern.sequence}d${pattern.shift}` : t('empty');
+  setStatus(editorStatus, '');
   preview.replaceChildren();
   preview.hidden = !valid;
   if (!valid) return;
-  preview.setAttribute('aria-label', `Aperçu de ${patternName.textContent}, 12 colonnes et 4 lignes`);
+  preview.setAttribute('aria-label', t('preview', { name: patternName.textContent }));
   const fragment = document.createDocumentFragment();
   for (let row = 0; row < 4; row++) {
     for (let column = 0; column < 12; column++) {
@@ -236,7 +245,7 @@ editor.addEventListener('submit', async event => {
   if (!sequenceInput.value || applyingPattern) return;
   // Copy the draft so further edits do not change the applied pattern.
   await applyPattern(draftPattern(), applyButton);
-  editorStatus.textContent = `${patternName.textContent} appliqué`;
+  setStatus(editorStatus, 'applied', { name: patternName.textContent });
 });
 
 function scheduleLayout() {
@@ -248,6 +257,15 @@ function rotateTile(tile) {
   tile.turns++;
   paint(tile);
   selectPattern(null);
+}
+
+function activateTile(tile, event) {
+  const touchDevice = event.pointerType === 'touch' || window.matchMedia('(pointer: coarse)').matches;
+  if (touchDevice && !document.querySelector('#controls-content').hidden) {
+    setControlsCollapsed(true);
+    return;
+  }
+  rotateTile(tile);
 }
 
 function zoomAt(value, x, y) {
@@ -315,7 +333,7 @@ function finishPointer(event) {
     const column = Math.floor((event.clientX - offsetX) / tileSize);
     const row = Math.floor((event.clientY - offsetY) / tileSize);
     const tile = tiles.get(`${column},${row}`);
-    if (tile) rotateTile(tile);
+    if (tile) activateTile(tile, event);
   }
   pointers.delete(event.pointerId);
   if (paving.hasPointerCapture(event.pointerId)) paving.releasePointerCapture(event.pointerId);
@@ -327,6 +345,33 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
   paving.addEventListener(type, finishPointer);
 }
 
+function drawExportSignature(context, width, height) {
+  const text = 'https://damiendevienne.github.io/tiles/';
+  context.save();
+  let fontSize = 11;
+  const margin = Math.min(8, width / 40, height / 40);
+  const padding = 6;
+  context.font = `${fontSize}px sans-serif`;
+  const available = Math.max(1, width - margin * 2 - padding * 2);
+  if (context.measureText(text).width > available) {
+    fontSize *= available / context.measureText(text).width;
+    context.font = `${fontSize}px sans-serif`;
+  }
+  const boxWidth = context.measureText(text).width + padding * 2;
+  const boxHeight = fontSize + padding * 2;
+  const x = width - margin - boxWidth;
+  const y = height - margin - boxHeight;
+  context.fillStyle = '#97b9d2';
+  context.beginPath();
+  context.roundRect(x, y, boxWidth, boxHeight, 5);
+  context.fill();
+  context.fillStyle = '#ffffff';
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillText(text, x + padding, y + boxHeight / 2);
+  context.restore();
+}
+
 exportButton.addEventListener('click', async () => {
   if (exportingImage || applyingPattern) return;
   exportingImage = true;
@@ -334,7 +379,7 @@ exportButton.addEventListener('click', async () => {
   exportButton.classList.add('is-loading');
   exportButton.setAttribute('aria-busy', 'true');
   clearTimeout(exportStatusTimer);
-  exportStatus.textContent = '';
+  setStatus(exportStatus, '');
   editor.hidden = true;
   document.querySelector('#editor-toggle').setAttribute('aria-expanded', 'false');
 
@@ -343,6 +388,7 @@ exportButton.addEventListener('click', async () => {
     cancelAnimationFrame(layoutFrame);
     layout();
     const size = tileSize;
+    const imageFile = 'tile.png';
     const exportX = offsetX;
     const exportY = offsetY;
     const width = paving.clientWidth;
@@ -354,8 +400,8 @@ exportButton.addEventListener('click', async () => {
     const source = new Image();
     // A file:// image taints the canvas. An embedded data URL stays exportable.
     source.src = window.location.protocol === 'file:'
-      ? window.localExportTile
-      : 'img/tile.png';
+      ? window.localExportTiles[imageFile]
+      : `img/${imageFile}`;
     await source.decode();
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -378,6 +424,7 @@ exportButton.addEventListener('click', async () => {
       if (++processed % 200 === 0) await nextFrame();
     }
 
+    drawExportSignature(context, width, height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('Encodage PNG impossible');
     const url = URL.createObjectURL(blob);
@@ -388,21 +435,25 @@ exportButton.addEventListener('click', async () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    exportStatus.textContent = `PNG ${width} × ${height} prêt : téléchargement lancé.`;
+    setStatus(exportStatus, 'exported', { width, height });
     exportStatusTimer = setTimeout(() => {
-      exportStatus.textContent = '';
+      setStatus(exportStatus, '');
     }, 5000);
   } catch (error) {
     console.error('Export PNG impossible', error);
-    exportStatus.textContent = error.name === 'SecurityError'
-      ? 'Export bloqué par le navigateur : ouvre le site via un serveur local ou GitHub Pages.'
-      : 'Export impossible. Vérifie le chargement de l’image et réessaie.';
+    setStatus(exportStatus, error.name === 'SecurityError' ? 'exportBlocked' : 'exportError');
   } finally {
     exportingImage = false;
     exportButton.disabled = applyingPattern;
     exportButton.classList.remove('is-loading');
     exportButton.removeAttribute('aria-busy');
   }
+});
+
+document.addEventListener('languagechange', () => {
+  for (const tile of tiles.values()) paint(tile);
+  if (!sequenceInput.value) patternName.textContent = t('empty');
+  preview.setAttribute('aria-label', t('preview', { name: patternName.textContent }));
 });
 
 zoom.addEventListener('input', () => zoomAt(Number(zoom.value), paving.clientWidth / 2, paving.clientHeight / 2));
