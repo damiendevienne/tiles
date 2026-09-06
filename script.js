@@ -18,6 +18,9 @@ const patternName = document.querySelector('#pattern-name');
 const preview = document.querySelector('#preview');
 const applyButton = document.querySelector('#apply-pattern');
 const editorStatus = document.querySelector('#editor-status');
+const exportButton = document.querySelector('#export-image');
+const exportStatus = document.querySelector('#export-status');
+let exportingImage = false;
 const controlsToggle = document.querySelector('#controls-toggle');
 controlsToggle.addEventListener('click', () => {
   const content = document.querySelector('#controls-content');
@@ -121,7 +124,7 @@ async function applyPattern(pattern, button) {
   applyingPattern = true;
   button.classList.add('is-loading');
   button.setAttribute('aria-busy', 'true');
-  const inputs = [...patternButtons, applyButton, zoom, sequenceInput, shiftInput];
+  const inputs = [...patternButtons, applyButton, zoom, sequenceInput, shiftInput, exportButton];
   const disabledStates = inputs.map(input => input.disabled);
   inputs.forEach(input => { input.disabled = true; });
   try {
@@ -151,6 +154,7 @@ async function applyPattern(pattern, button) {
     button.classList.remove('is-loading');
     button.removeAttribute('aria-busy');
     inputs.forEach((input, index) => { input.disabled = disabledStates[index]; });
+    exportButton.disabled = exportingImage;
     applyingPattern = false;
   }
 }
@@ -227,6 +231,78 @@ function scheduleLayout() {
   cancelAnimationFrame(layoutFrame);
   layoutFrame = requestAnimationFrame(layout);
 }
+
+exportButton.addEventListener('click', async () => {
+  if (exportingImage || applyingPattern) return;
+  exportingImage = true;
+  exportButton.disabled = true;
+  exportButton.classList.add('is-loading');
+  exportButton.setAttribute('aria-busy', 'true');
+  exportStatus.textContent = '';
+  editor.hidden = true;
+  document.querySelector('#editor-toggle').setAttribute('aria-expanded', 'false');
+
+  try {
+    // Flush a pending zoom, then snapshot the settled orientations at click time.
+    cancelAnimationFrame(layoutFrame);
+    layout();
+    const size = Number(zoom.value);
+    const width = paving.clientWidth;
+    const height = paving.clientHeight;
+    const snapshot = [...tiles.values()].map(({ column, row, turns }) => ({ column, row, turns }));
+    await nextFrame();
+    await nextFrame();
+
+    const source = new Image();
+    // A file:// image taints the canvas. An embedded data URL stays exportable.
+    source.src = window.location.protocol === 'file:'
+      ? window.localExportTile
+      : 'img/tile.png';
+    await source.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas indisponible');
+
+    // Match the centered 100.54% CSS background crop exactly.
+    const sourceWidth = source.naturalWidth / 1.0054;
+    const sourceHeight = source.naturalHeight / 1.0054;
+    const sourceX = (source.naturalWidth - sourceWidth) / 2;
+    const sourceY = (source.naturalHeight - sourceHeight) / 2;
+    let processed = 0;
+    for (const { column, row, turns } of snapshot) {
+      context.save();
+      context.translate((column + 0.5) * size, (row + 0.5) * size);
+      context.rotate((turns % 4) * Math.PI / 2);
+      context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, -size / 2, -size / 2, size, size);
+      context.restore();
+      if (++processed % 200 === 0) await nextFrame();
+    }
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Encodage PNG impossible');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pavage-${width}x${height}-${Date.now()}.png`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    exportStatus.textContent = `PNG ${width} × ${height} prêt : téléchargement lancé.`;
+  } catch (error) {
+    console.error('Export PNG impossible', error);
+    exportStatus.textContent = error.name === 'SecurityError'
+      ? 'Export bloqué par le navigateur : ouvre le site via un serveur local ou GitHub Pages.'
+      : 'Export impossible. Vérifie le chargement de l’image et réessaie.';
+  } finally {
+    exportingImage = false;
+    exportButton.disabled = applyingPattern;
+    exportButton.classList.remove('is-loading');
+    exportButton.removeAttribute('aria-busy');
+  }
+});
 
 zoom.addEventListener('input', scheduleLayout);
 window.addEventListener('resize', scheduleLayout);

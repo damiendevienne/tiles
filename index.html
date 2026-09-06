@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Pavage</title>
     <link rel="stylesheet" href="style.css">
+    <script src="export-image.js" defer></script>
     <script src="script.js" defer></script>
   </head>
   <body>
@@ -24,6 +25,8 @@
         <button type="button" id="editor-toggle" aria-expanded="false" aria-controls="editor">Motif perso</button>
         <button type="button" id="info-toggle" aria-expanded="false" aria-controls="info">Info</button>
       </div>
+      <button type="button" id="export-image">Exporter PNG</button>
+      <small id="export-status" role="status"></small>
       <section id="info" hidden aria-label="Nomenclature des motifs">
         <p><strong>Nomenclature</strong> : A est l’image de base ; B est la tuile tournée de 90°.</p>
         <p>La séquence se répète horizontalement. Le nombre après <strong>d</strong> indique le décalage vers la gauche à chaque nouvelle ligne.</p>
