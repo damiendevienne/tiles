@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Pavage</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <main id="paving" aria-label="Pavage interactif"></main>
+    <div class="controls" role="group" aria-label="Contrôles du pavage">
+      <label class="zoom" for="zoom"><span>Zoom</span><input id="zoom" type="range" min="40" max="240" value="120" step="1"></label>
+      <div class="patterns">
+        <button type="button" data-pattern="random">Random</button>
+        <button type="button" data-pattern="1" aria-pressed="true">Motif 1</button>
+        <button type="button" data-pattern="2" aria-pressed="false">Motif 2</button>
+        <button type="button" data-pattern="3" aria-pressed="false">Motif 3</button>
+        <button type="button" data-pattern="4" aria-pressed="false">Motif 4</button>
+      </div>
+    </div>
+  </body>
+</html>
