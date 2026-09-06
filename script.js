@@ -4,6 +4,19 @@ const patternButtons = document.querySelectorAll('[data-pattern]');
 const tiles = new Map();
 let activePattern = '1';
 let layoutFrame;
+const presets = {
+  '1': { sequence: 'A', shift: 0 },
+  '2': { sequence: 'B', shift: 0 },
+  '3': { sequence: 'AB', shift: 0 },
+  '4': { sequence: 'AB', shift: 1 },
+};
+const editor = document.querySelector('#editor');
+const sequenceInput = document.querySelector('#sequence');
+const shiftInput = document.querySelector('#shift');
+const patternName = document.querySelector('#pattern-name');
+const preview = document.querySelector('#preview');
+const applyButton = document.querySelector('#apply-pattern');
+const editorStatus = document.querySelector('#editor-status');
 
 // Reserve zoom for the slider, including trackpad pinch and browser shortcuts.
 document.addEventListener('wheel', event => {
@@ -24,10 +37,11 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 
 function orientation(pattern, column, row) {
-  if (pattern === '1') return 0;
-  if (pattern === '2') return 1;
-  if (pattern === '3') return column % 2;
-  if (pattern === '4') return (column + row) % 2;
+  const definition = typeof pattern === 'object' ? pattern : presets[pattern];
+  if (definition) {
+    const index = (column + row * definition.shift) % definition.sequence.length;
+    return definition.sequence[index] === 'B' ? 1 : 0;
+  }
   return Math.random() < 0.5 ? 0 : 1;
 }
 
@@ -89,19 +103,81 @@ function layout() {
   paving.append(fragment);
 }
 
-patternButtons.forEach(button => {
-  button.addEventListener('click', () => {
-    const pattern = button.dataset.pattern;
-    selectPattern(pattern);
-    for (const tile of tiles.values()) {
-      const target = orientation(pattern, tile.column, tile.row);
-      // Accumulate clockwise turns; leave already correct tiles untouched.
-      if (tile.turns % 2 !== target) {
-        tile.turns++;
-        paint(tile);
-      }
+function applyPattern(pattern) {
+  selectPattern(pattern);
+  editorStatus.textContent = '';
+  for (const tile of tiles.values()) {
+    const target = orientation(pattern, tile.column, tile.row);
+    // Accumulate clockwise turns; leave already correct tiles untouched.
+    if (tile.turns % 2 !== target) {
+      tile.turns++;
+      paint(tile);
     }
+  }
+}
+
+patternButtons.forEach(button => {
+  button.addEventListener('click', () => applyPattern(button.dataset.pattern));
+});
+
+for (const name of ['editor', 'info']) {
+  const toggle = document.querySelector(`#${name}-toggle`);
+  const panel = document.querySelector(`#${name}`);
+  toggle.addEventListener('click', () => {
+    const opening = panel.hidden;
+    for (const other of ['editor', 'info']) {
+      document.querySelector(`#${other}`).hidden = true;
+      document.querySelector(`#${other}-toggle`).setAttribute('aria-expanded', 'false');
+    }
+    panel.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
   });
+}
+
+function draftPattern() {
+  return { sequence: sequenceInput.value, shift: Number(shiftInput.value) };
+}
+
+function updateEditor() {
+  sequenceInput.value = sequenceInput.value.toUpperCase().replace(/[^AB]/g, '');
+  const maxShift = Math.max(0, sequenceInput.value.length - 1);
+  const shift = Math.min(Number(shiftInput.value), maxShift);
+  shiftInput.max = String(maxShift);
+  shiftInput.value = String(shift);
+  shiftInput.disabled = maxShift === 0;
+  document.querySelector('#shift-value').textContent = String(shift);
+  const pattern = draftPattern();
+  const valid = pattern.sequence.length > 0;
+  applyButton.disabled = !valid;
+  patternName.textContent = valid ? `${pattern.sequence}d${pattern.shift}` : 'Saisis une séquence de A et B';
+  editorStatus.textContent = '';
+  preview.replaceChildren();
+  preview.hidden = !valid;
+  if (!valid) return;
+  preview.setAttribute('aria-label', `Aperçu de ${patternName.textContent}, 12 colonnes et 4 lignes`);
+  const fragment = document.createDocumentFragment();
+  for (let row = 0; row < 4; row++) {
+    for (let column = 0; column < 12; column++) {
+      const cell = document.createElement('span');
+      cell.className = 'preview-tile';
+      const image = document.createElement('span');
+      image.className = 'tile-image';
+      image.style.transform = `rotate(${orientation(pattern, column, row) * 90}deg)`;
+      cell.append(image);
+      fragment.append(cell);
+    }
+  }
+  preview.append(fragment);
+}
+
+sequenceInput.addEventListener('input', updateEditor);
+shiftInput.addEventListener('input', updateEditor);
+editor.addEventListener('submit', event => {
+  event.preventDefault();
+  if (!sequenceInput.value) return;
+  // Copy the draft so further edits do not change the applied pattern.
+  applyPattern(draftPattern());
+  editorStatus.textContent = `${patternName.textContent} appliqué`;
 });
 
 function scheduleLayout() {
@@ -111,4 +187,5 @@ function scheduleLayout() {
 
 zoom.addEventListener('input', scheduleLayout);
 window.addEventListener('resize', scheduleLayout);
+updateEditor();
 layout();

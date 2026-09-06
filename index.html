@@ -13,11 +13,32 @@
       <label class="zoom" for="zoom"><span>Zoom</span><input id="zoom" type="range" min="40" max="240" value="120" step="1"></label>
       <div class="patterns">
         <button type="button" data-pattern="random">Random</button>
-        <button type="button" data-pattern="1" aria-pressed="true">Motif 1</button>
-        <button type="button" data-pattern="2" aria-pressed="false">Motif 2</button>
-        <button type="button" data-pattern="3" aria-pressed="false">Motif 3</button>
-        <button type="button" data-pattern="4" aria-pressed="false">Motif 4</button>
+        <button type="button" data-pattern="1" aria-pressed="true">Motif 1 (Ad0)</button>
+        <button type="button" data-pattern="2" aria-pressed="false">Motif 2 (Bd0)</button>
+        <button type="button" data-pattern="3" aria-pressed="false">Motif 3 (ABd0)</button>
+        <button type="button" data-pattern="4" aria-pressed="false">Motif 4 (ABd1)</button>
       </div>
+      <div class="panel-actions">
+        <button type="button" id="editor-toggle" aria-expanded="false" aria-controls="editor">Motif perso</button>
+        <button type="button" id="info-toggle" aria-expanded="false" aria-controls="info">Info</button>
+      </div>
+      <section id="info" hidden aria-label="Nomenclature des motifs">
+        <p><strong>La séquence + d + le décalage.</strong> A est l’image de base ; B est la tuile tournée de 90°.</p>
+        <p>La séquence se répète horizontalement. Le nombre après <strong>d</strong> indique le décalage vers la gauche à chaque nouvelle ligne.</p>
+        <p><strong>ABd0</strong> : toutes les lignes font ABAB…<br><strong>ABd1</strong> : une ligne ABAB…, puis BABA…</p>
+        <p><strong>ABBABAd1</strong> : ABBABA…, puis BBABAA…, puis BABAAB… Le décalage va de 0 à la longueur de la séquence moins 1.</p>
+      </section>
+      <form id="editor" hidden>
+        <label for="sequence">Séquence A / B</label>
+        <input id="sequence" type="text" value="ABBABA" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="sequence-help">
+        <small id="sequence-help">A et B uniquement ; les espaces sont ignorés.</small>
+        <label class="shift-label" for="shift">Décalage par ligne <output id="shift-value" for="shift">1</output></label>
+        <input id="shift" type="range" min="0" max="5" value="1" step="1">
+        <output id="pattern-name" for="sequence shift" aria-live="polite">ABBABAd1</output>
+        <div id="preview" role="img" aria-label="Aperçu du motif"></div>
+        <button id="apply-pattern" type="submit">Appliquer</button>
+        <small id="editor-status" role="status"></small>
+      </form>
     </div>
   </body>
 </html>

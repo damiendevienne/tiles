@@ -60,12 +60,14 @@ html, body {
   box-shadow: 0 2px 12px rgb(0 0 0 / 15%);
   color: #052c60;
   font-size: 13px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
 }
 
 .zoom { display: flex; align-items: center; gap: 12px; }
 .zoom input { flex: 1; min-width: 0; margin: 0; accent-color: #052c60; cursor: pointer; }
 .patterns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.patterns button {
+.controls button {
   flex: 1 0 auto;
   min-height: 34px;
   padding: 6px 9px;
@@ -77,9 +79,34 @@ html, body {
   cursor: pointer;
   touch-action: manipulation;
 }
-.patterns button:hover { background: rgb(5 44 96 / 18%); }
+.controls button:hover { background: rgb(5 44 96 / 18%); }
 .patterns button[aria-pressed="true"] { background: #052c60; color: #fff9e5; }
-.patterns button:focus-visible, input:focus-visible { outline: 2px solid #052c60; outline-offset: 2px; }
+.controls button:focus-visible, input:focus-visible { outline: 2px solid #052c60; outline-offset: 2px; }
+
+[hidden] { display: none !important; }
+.panel-actions { display: flex; gap: 6px; margin-top: 6px; }
+.panel-actions button[aria-expanded="true"] { background: #052c60; color: #fff9e5; }
+#editor { display: grid; gap: 8px; margin-top: 14px; }
+#sequence {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgb(5 44 96 / 25%);
+  border-radius: 5px;
+  font: 16px ui-monospace, monospace;
+  color: inherit;
+  background: #fffdf5;
+}
+.shift-label { display: flex; justify-content: space-between; margin-top: 4px; }
+#shift { width: 100%; margin: 0; accent-color: #052c60; }
+#pattern-name { font: bold 14px ui-monospace, monospace; overflow-wrap: anywhere; }
+#preview { display: grid; grid-template-columns: repeat(12, 1fr); overflow: hidden; }
+.preview-tile { position: relative; aspect-ratio: 1; overflow: hidden; background: #052c60; }
+#editor small { line-height: 1.4; }
+#editor-status:empty { display: none; }
+.controls button:disabled { opacity: 0.45; cursor: default; }
+#info { line-height: 1.5; }
+#info p:last-child { margin-bottom: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .tile-image { transition: none; }
