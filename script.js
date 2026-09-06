@@ -21,6 +21,7 @@ const editorStatus = document.querySelector('#editor-status');
 const exportButton = document.querySelector('#export-image');
 const exportStatus = document.querySelector('#export-status');
 let exportingImage = false;
+let exportStatusTimer;
 const controlsToggle = document.querySelector('#controls-toggle');
 controlsToggle.addEventListener('click', () => {
   const content = document.querySelector('#controls-content');
@@ -238,6 +239,7 @@ exportButton.addEventListener('click', async () => {
   exportButton.disabled = true;
   exportButton.classList.add('is-loading');
   exportButton.setAttribute('aria-busy', 'true');
+  clearTimeout(exportStatusTimer);
   exportStatus.textContent = '';
   editor.hidden = true;
   document.querySelector('#editor-toggle').setAttribute('aria-expanded', 'false');
@@ -291,6 +293,9 @@ exportButton.addEventListener('click', async () => {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     exportStatus.textContent = `PNG ${width} × ${height} prêt : téléchargement lancé.`;
+    exportStatusTimer = setTimeout(() => {
+      exportStatus.textContent = '';
+    }, 5000);
   } catch (error) {
     console.error('Export PNG impossible', error);
     exportStatus.textContent = error.name === 'SecurityError'
